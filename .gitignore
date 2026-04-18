@@ -1,0 +1,11 @@
+data/
+weights/
+*.pth
+*.onnx
+__pycache__/
+*.pyc
+.env
+wandb/
+outputs/
+*.egg-info/
+.ipynb_checkpoints/
