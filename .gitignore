@@ -9,3 +9,8 @@ wandb/
 outputs/
 *.egg-info/
 .ipynb_checkpoints/
+Untitled.ipynb
+check_env.py
+copy_ddd.py
+copy_mrl.py
+fix_resize.py
