@@ -1,0 +1,7 @@
+{
+    "python.defaultInterpreterPath": "C:\\Users\\mitta\\AppData\\Local\\anaconda3\\envs\\drowsy\\python.exe",
+    "editor.formatOnSave": true,
+    "python.formatting.provider": "black",
+    "editor.rulers": [88],
+    "files.trimTrailingWhitespace": true
+}
