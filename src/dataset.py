@@ -141,6 +141,10 @@ def get_dataloaders(
             num_workers = num_workers,
             pin_memory  = pin_memory,
             drop_last   = (split == "train"),  # drop incomplete last batch
+<<<<<<< HEAD
+            persistent_workers  = (num_workers > 0),
+=======
+>>>>>>> c7b6af3d04ef2b1bdaa6d468661523b949e8ce9b
         )
         counts = ds.get_class_counts()
         print(f"  {split:5s}: {len(ds):,} images | "
