@@ -1,6 +1,5 @@
 data/
 weights/
-*.pth
 *.onnx
 __pycache__/
 *.pyc
