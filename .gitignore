@@ -1,5 +1,4 @@
 data/
-weights/
 *.onnx
 __pycache__/
 *.pyc
