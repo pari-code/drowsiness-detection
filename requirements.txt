@@ -1,8 +1,8 @@
-torch==2.0.0
-torchvision==0.15.0
+torch==2.2.2
+torchvision==0.17.2
 streamlit>=1.28.0
 opencv-python-headless
-mediapipe==0.9.3
+mediapipe==0.10.14
 Pillow
 numpy
 matplotlib
