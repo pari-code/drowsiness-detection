@@ -45,15 +45,18 @@ def load_model():
 
 
 def predict_image(model, img_pil, device):
-    """Run inference on a single PIL image. Returns (label, prob)."""
+
     img_pil = img_pil.convert("RGB")
+
+    img_np = np.array(img_pil)
+
+    img_pil = Image.fromarray(img_np)
+
     t = TRANSFORM(img_pil)
-    seq = t.unsqueeze(0).unsqueeze(0).repeat(1, SEQ_LEN, 1, 1, 1).to(device)
+    t = t.unsqueeze(0).to(device)
+
     with torch.no_grad():
-        probs = torch.softmax(model(seq), dim=1)[0]
-    drowsy_prob = probs[1].item()
-    label = "Drowsy" if drowsy_prob > 0.5 else "Alert"
-    return label, drowsy_prob
+        out = model(t)
 
 
 def get_gradcam(model, img_pil, device):
