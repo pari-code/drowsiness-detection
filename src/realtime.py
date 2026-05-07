@@ -9,6 +9,10 @@ from PIL import Image
 from torchvision import transforms
 import sys
 import os
+import csv
+import time
+from datetime import datetime
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model import DrowsinessDetector
@@ -24,6 +28,20 @@ CONSEC_FRAMES   = 20
 LEFT_EYE  = [362, 385, 387, 263, 373, 380]
 RIGHT_EYE = [33,  160, 158, 133, 153, 144]
 MOUTH     = [61,  291, 0,   17,  13,  14 ]
+
+# ── Head pose constants ─────────────────────────────────────
+# 3D reference face model points (generic human face)
+FACE_3D = np.array([
+    [0.0,    0.0,    0.0   ],  # nose tip        — landmark 4
+    [0.0,   -330.0, -65.0 ],  # chin            — landmark 152
+    [-225.0, 170.0, -135.0],  # left eye corner — landmark 263
+    [ 225.0, 170.0, -135.0],  # right eye corner — landmark 33
+    [-150.0,-150.0, -125.0],  # left mouth      — landmark 287
+    [ 150.0,-150.0, -125.0],  # right mouth     — landmark 57
+], dtype=np.float64)
+
+FACE_LM_IDS = [4, 152, 263, 33, 287, 57]
+HEAD_PITCH_THRESHOLD = 20   # degrees — nodding forward
 
 TRANSFORM = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -60,6 +78,44 @@ def crop_face(frame, landmarks, w, h, padding=0.12):
     crop = frame[y1:y2, x1:x2]
     return crop if crop.size > 0 else frame
 
+def get_head_pose(landmarks, w, h):
+    """
+    Compute head pose angles from MediaPipe landmarks.
+    Returns (pitch, yaw, roll) in degrees.
+    pitch > 0  = nodding down (drowsy sign)
+    yaw   > 0  = looking right
+    roll  > 0  = tilting right
+    """
+    # 2D image points corresponding to FACE_3D
+    pts_2d = np.array([
+        [landmarks[idx].x * w, landmarks[idx].y * h]
+        for idx in FACE_LM_IDS
+    ], dtype=np.float64)
+
+    # Camera matrix — approximate using frame dimensions
+    focal      = w
+    cam_matrix = np.array([
+        [focal,   0,    w/2],
+        [0,    focal,    h/2],
+        [0,       0,      1]
+    ], dtype=np.float64)
+
+    dist_coeffs = np.zeros((4, 1), dtype=np.float64)
+
+    success, rvec, tvec = cv2.solvePnP(
+        FACE_3D, pts_2d, cam_matrix, dist_coeffs,
+        flags=cv2.SOLVEPNP_ITERATIVE
+    )
+    if not success:
+        return 0.0, 0.0, 0.0
+
+    rmat, _        = cv2.Rodrigues(rvec)
+    angles, _, _, _, _, _ = cv2.RQDecomp3x3(rmat)
+    pitch = angles[0] * 360
+    yaw   = angles[1] * 360
+    roll  = angles[2] * 360
+    return pitch, yaw, roll
+
 
 class DrowsinessMonitor:
     def __init__(self):
@@ -90,6 +146,19 @@ class DrowsinessMonitor:
             pygame.mixer.music.load(ALARM_PATH)
         else:
             print(f"Warning: {ALARM_PATH} not found — alarm disabled")
+        
+        os.makedirs("outputs/sessions", exist_ok=True)
+        ts        = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_path  = f"outputs/sessions/session_{ts}.csv"
+        self.log_file = open(log_path, "w", newline="")
+        self.writer   = csv.writer(self.log_file)
+        self.writer.writerow([
+            "frame", "timestamp", "ear", "mar",
+            "drowsy_prob", "pitch", "perclos",
+            "alert_counter", "alarm"
+        ])
+        self.frame_count = 0
+        print(f"Logging session to: {log_path}")
 
     def predict(self):
         if len(self.frame_buffer) < SEQ_LEN:
@@ -110,13 +179,18 @@ class DrowsinessMonitor:
             pygame.mixer.music.stop()
             self.alarm_on = False
 
-    def draw_hud(self, frame, ear, mar, drowsy_prob, perclos):
+    def draw_hud(self, frame, ear, mar, drowsy_prob, perclos, pitch=0):
         h, w = frame.shape[:2]
         color = (0, 50, 255) if self.alarm_on else (50, 200, 80)
         cv2.putText(frame, f"EAR: {ear:.2f}",           (10, 30),  cv2.FONT_HERSHEY_SIMPLEX, 0.65, color, 2)
         cv2.putText(frame, f"MAR: {mar:.2f}",           (10, 58),  cv2.FONT_HERSHEY_SIMPLEX, 0.65, color, 2)
         cv2.putText(frame, f"Drowsy: {drowsy_prob*100:.0f}%", (10, 86), cv2.FONT_HERSHEY_SIMPLEX, 0.65, color, 2)
         cv2.putText(frame, f"PERCLOS: {perclos*100:.1f}%",    (10, 114), cv2.FONT_HERSHEY_SIMPLEX, 0.65, color, 2)
+        pitch_color = (0, 50, 255) if pitch > HEAD_PITCH_THRESHOLD else color
+        cv2.putText(frame, f"Pitch: {pitch:.1f}deg",
+                    (10, 142), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.65, pitch_color, 2)
+
         bar_w = int((self.alert_counter / CONSEC_FRAMES) * 200)
         cv2.rectangle(frame, (10, 130), (210, 145), (60, 60, 60), -1)
         cv2.rectangle(frame, (10, 130), (10 + bar_w, 145), color, -1)
@@ -140,12 +214,14 @@ class DrowsinessMonitor:
             rgb  = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             res  = self.face_mesh.process(rgb)
             ear = mar = drowsy_prob = 0.0
+            pitch = yaw = roll = 0.0
 
             if res.multi_face_landmarks:
                 lm = res.multi_face_landmarks[0].landmark
                 ear = (eye_aspect_ratio(lm, LEFT_EYE,  w, h) +
                        eye_aspect_ratio(lm, RIGHT_EYE, w, h)) / 2.0
                 mar = mouth_aspect_ratio(lm, MOUTH, w, h)
+                pitch, yaw, roll = get_head_pose(lm, w, h)
                 self.eye_states.append(1 if ear < EAR_THRESHOLD else 0)
                 perclos = sum(self.eye_states) / len(self.eye_states)
 
@@ -158,7 +234,8 @@ class DrowsinessMonitor:
                     (drowsy_prob > MODEL_THRESHOLD) or
                     (ear < EAR_THRESHOLD and drowsy_prob > 0.4) or
                     (mar > MAR_THRESHOLD and drowsy_prob > 0.4) or
-                    (perclos > 0.15 and drowsy_prob > 0.4)
+                    (perclos > 0.15 and drowsy_prob > 0.4) or
+                    (pitch > HEAD_PITCH_THRESHOLD and drowsy_prob > 0.4)  # head nodding
                 )
 
                 if is_drowsy:
@@ -172,7 +249,20 @@ class DrowsinessMonitor:
             else:
                 perclos = sum(self.eye_states) / max(len(self.eye_states), 1)
 
-            self.draw_hud(frame, ear, mar, drowsy_prob, perclos)
+            self.draw_hud(frame, ear, mar, drowsy_prob, perclos, pitch)
+
+            self.writer.writerow([
+                self.frame_count,
+                f"{time.time():.3f}",
+                f"{ear:.4f}",
+                f"{mar:.4f}",
+                f"{drowsy_prob:.4f}",
+                f"{pitch:.2f}",
+                f"{perclos:.4f}",
+                self.alert_counter,
+                1 if self.alarm_on else 0
+            ])
+            self.frame_count += 1
             cv2.imshow("Driver Monitor — ESC to quit", frame)
             if cv2.waitKey(1) & 0xFF == 27:
                 break
@@ -181,6 +271,8 @@ class DrowsinessMonitor:
         cv2.destroyAllWindows()
         self.stop_alarm()
         pygame.mixer.quit()
+        self.log_file.close()
+        print(f"Session log saved. Run plot_session.py to visualise.")
         print("Session ended.")
 
 
