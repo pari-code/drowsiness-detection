@@ -46,7 +46,8 @@ def load_model():
 
 def predict_image(model, img_pil, device):
     """Run inference on a single PIL image. Returns (label, prob)."""
-    t   = TRANSFORM(img_pil)
+    img_pil = img_pil.convert("RGB")
+    t = TRANSFORM(img_pil)
     seq = t.unsqueeze(0).unsqueeze(0).repeat(1, SEQ_LEN, 1, 1, 1).to(device)
     with torch.no_grad():
         probs = torch.softmax(model(seq), dim=1)[0]
