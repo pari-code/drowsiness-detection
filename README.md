@@ -222,9 +222,9 @@ MIT License — see [LICENSE](LICENSE) for details.
 If you use this project in your research, please cite:
 ```
 @misc{drowsiness2026,
-  author = {Mittalpari},
+  author = {Pari Mittal},
   title  = {Driver Drowsiness Detection System},
   year   = {2026},
-  url    = {https://github.com/YOUR_USERNAME/drowsiness-detection}
+  url    = {https://github.com/pari-code/drowsiness-detection}
 }
 ```
