@@ -5,7 +5,6 @@
 [![Python](https://img.shields.io/badge/Python-3.10-blue)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0-red)](https://pytorch.org)
 [![MediaPipe](https://img.shields.io/badge/MediaPipe-0.9.3-green)](https://mediapipe.dev)
-[![Streamlit](https://img.shields.io/badge/Demo-Streamlit-ff4b4b)](https://streamlit.io)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 ---
@@ -20,17 +19,6 @@ The system continuously monitors a driver through a webcam, detects drowsiness s
 - **Head pose** — forward head pitch above 20° indicates nodding
 - **PERCLOS** — percentage of eye closure over a rolling 10-second window (clinical standard)
 - **Deep learning model** — EfficientNet-B0 + BiLSTM processes face sequences and outputs a drowsiness probability
-
----
-
-## Demo
-
-| Real-time detection | Grad-CAM explainability | Session timeline |
-|---|---|---|
-| Live webcam with HUD overlay | Model attention on eyelid region | EAR + drowsy prob over time |
-
-> **Live web demo:** [your-app.streamlit.app](https://your-app.streamlit.app)
-> **Demo video:** [YouTube link](https://youtube.com)
 
 ---
 
@@ -163,13 +151,6 @@ python src/train.py
 ```bash
 python realtime.py
 # Opens webcam window — press ESC to quit
-```
-
-**6. Run web demo:**
-```bash
-streamlit run app.py
-# Opens browser at localhost:8501
-```
 
 ---
 
